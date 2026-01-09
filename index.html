@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>超級范寬兄弟：谿山行旅篇</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: "Microsoft JhengHei", sans-serif;
+            color: white;
+            flex-direction: column;
+            touch-action: none; /* 防止滾動 */
+        }
+        canvas {
+            border: 5px solid #5d4037;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            background-color: #e6dcc3;
+        }
+        #ui {
+            margin-top: 10px;
+            text-align: center;
+        }
+        .instructions {
+            font-size: 14px;
+            color: #aaa;
+            margin-top: 5px;
+        }
+        /* 手機控制按鈕 */
+        .button {
+            position: fixed;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.3);
+            text-align: center;
+            line-height: 60px;
+            font-size: 20px;
+            color: white;
+            user-select: none;
+            touch-action: none;
+        }
+        #leftBtn { left: 20px; bottom: 20px; }
+        #rightBtn { left: 100px; bottom: 20px; }
+        #jumpBtn { right: 20px; bottom: 20px; }
+        .button:active { background: rgba(255,255,255,0.6); }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas" width="800" height="450"></canvas>
+
+<div id="ui">
+    <h2 id="status">尋找藏在樹葉中的「范寬」簽名！</h2>
+    <div class="instructions">操控：左右方向鍵 / 左右按鈕移動 | 空白鍵 / 跳按鈕跳躍 | R 重來</div>
+</div>
+
+<!-- 手機按鈕 -->
+<div id="leftBtn" class="button">◀</div>
+<div id="rightBtn" class="button">▶</div>
+<div id="jumpBtn" class="button">⬆</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const statusText = document.getElementById('status');
+
+let gameState = "PLAYING";
+const gravity = 0.5;
+const friction = 0.8;
+
+const player = {
+    x: 50,
+    y: 300,
+    width: 30,
+    height: 40,
+    dx: 0,
+    dy: 0,
+    speed: 5,
+    jumpPower: -12,
+    grounded: false,
+    color: '#d32f2f' 
+};
+
+const platforms = [
+    { x: 0, y: 400, w: 800, h: 50, type: 'ground' },
+    { x: 200, y: 340, w: 60, h: 60, type: 'rock' },
+    { x: 350, y: 280, w: 80, h: 20, type: 'rock' },
+    { x: 700, y: 350, w: 100, h: 100, type: 'rock' }
+];
+
+const donkeys = [
+    { x: 450, y: 250, w: 50, h: 20, dx: 1, minX: 450, maxX: 600 },
+    { x: 550, y: 200, w: 50, h: 20, dx: -1.5, minX: 500, maxX: 650 }
+];
+
+const goal = {
+    x: 730,
+    y: 240,
+    w: 40,
+    h: 40,
+    hit: false
+};
+
+const keys = {
+    ArrowLeft: false,
+    ArrowRight: false,
+    Space: false
+};
+
+// 鍵盤控制
+window.addEventListener('keydown', e => {
+    if(e.code in keys) keys[e.code] = true;
+    if (e.code === 'KeyR') resetGame();
+});
+window.addEventListener('keyup', e => {
+    if(e.code in keys) keys[e.code] = false;
+});
+
+// 手機按鈕控制
+const leftBtn = document.getElementById('leftBtn');
+const rightBtn = document.getElementById('rightBtn');
+const jumpBtn = document.getElementById('jumpBtn');
+
+function addTouchControls(btn, key) {
+    btn.addEventListener('touchstart', e => { e.preventDefault(); keys[key] = true; });
+    btn.addEventListener('touchend', e => { e.preventDefault(); keys[key] = false; });
+}
+addTouchControls(leftBtn, 'ArrowLeft');
+addTouchControls(rightBtn, 'ArrowRight');
+addTouchControls(jumpBtn, 'Space');
+
+function resetGame() {
+    player.x = 50;
+    player.y = 300;
+    player.dx = 0;
+    player.dy = 0;
+    goal.hit = false;
+    gameState = "PLAYING";
+    statusText.innerText = "尋找藏在樹葉中的「范寬」簽名！";
+    statusText.style.color = "white";
+}
+
+function update() {
+    if (gameState !== "PLAYING") return;
+
+    if (keys['ArrowLeft']) player.dx = -player.speed;
+    else if (keys['ArrowRight']) player.dx = player.speed;
+    else player.dx *= friction;
+
+    if (keys['Space'] && player.grounded) {
+        player.dy = player.jumpPower;
+        player.grounded = false;
+    }
+
+    player.dy += gravity;
+    player.x += player.dx;
+    player.y += player.dy;
+
+    if (player.x < 0) player.x = 0;
+    if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+
+    player.grounded = false;
+    platforms.forEach(p => checkCollision(player, p));
+    donkeys.forEach(d => {
+        d.x += d.dx;
+        if(d.x > d.maxX || d.x < d.minX) d.dx *= -1;
+        checkCollision(player, d);
+    });
+
+    if(player.x < goal.x + goal.w &&
+       player.x + player.width > goal.x &&
+       player.y < goal.y + goal.h &&
+       player.y + player.height > goal.y) {
+        goal.hit = true;
+        gameState = "WIN";
+        statusText.innerText = "發現真跡！「范寬」簽名現身！(勝利)";
+        statusText.style.color = "#FFD700";
+    }
+
+    requestAnimationFrame(update);
+}
+
+function checkCollision(char, plat) {
+    if (char.x < plat.x + plat.w &&
+        char.x + char.width > plat.x &&
+        char.y + char.height > plat.y &&
+        char.y + char.height < plat.y + 20 &&
+        char.dy >= 0) {
+            char.dy = 0;
+            char.grounded = true;
+            char.y = plat.y - char.height;
+            if(plat.dx) char.x += plat.dx;
+    }
+}
+
+function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // 遠景山
+    ctx.fillStyle = "rgba(40,40,40,0.1)";
+    ctx.beginPath();
+    ctx.moveTo(100,450);
+    ctx.lineTo(400,50);
+    ctx.lineTo(700,450);
+    ctx.fill();
+
+    // 雲霧
+    ctx.fillStyle = "rgba(230,220,195,0.8)";
+    ctx.fillRect(0,300,800,50);
+
+    // 飛瀑
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(650,100);
+    ctx.lineTo(650,350);
+    ctx.stroke();
+
+    // 平台
+    ctx.fillStyle = "#2b2b2b";
+    platforms.forEach(p => {
+        ctx.fillRect(p.x,p.y,p.w,p.h);
+        ctx.strokeStyle="#444";
+        ctx.strokeRect(p.x,p.y,p.w,p.h);
+    });
+
+    // 移動平台
+    ctx.fillStyle="#5d4037";
+    donkeys.forEach(d=>{
+        ctx.fillRect(d.x,d.y,d.w,d.h);
+        ctx.fillStyle="white";
+        ctx.font="10px Arial";
+        ctx.fillText("驢隊",d.x+10,d.y+14);
+        ctx.fillStyle="#5d4037";
+    });
+
+    // 終點樹木
+    ctx.fillStyle="#3e2723";
+    ctx.fillRect(720,280,20,70);
+    ctx.fillStyle = goal.hit ? "transparent" : "#2e7d32";
+    if(!goal.hit) ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
+
+    if(goal.hit) {
+        ctx.fillStyle="black";
+        ctx.font="bold 20px 'Microsoft JhengHei'";
+        ctx.fillText("范寬", goal.x, goal.y+30);
+        ctx.fillStyle="red";
+        ctx.globalAlpha=0.7;
+        ctx.fillRect(50,350,40,40);
+        ctx.fillStyle="white";
+        ctx.font="10px Arial";
+        ctx.fillText("忠孝",55,365);
+        ctx.fillText("之家",55,380);
+        ctx.globalAlpha=1.0;
+    }
+
+    // 玩家
+    ctx.fillStyle=player.color;
+    ctx.fillRect(player.x,player.y,player.width,player.height);
+    ctx.fillStyle="white";
+    ctx.font="16px Arial";
+    ctx.fillText("旅",player.x+7,player.y+25);
+
+    requestAnimationFrame(draw);
+}
+
+// 啟動循環
+update();
+draw();
+</script>
+
+</body>
+</html>
